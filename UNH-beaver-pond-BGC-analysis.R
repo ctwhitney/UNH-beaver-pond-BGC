@@ -8,13 +8,19 @@
 #library(basemaps)
 library(st)
 library(sf)
+library(sp)
 #library(rnaturalearth)
 #library(rnaturalearthdata)
 #library(stars)
 library(ggmap)
-library(gganimate)
-library(gifski)
+library(rgdal)
+#library(gganimate)
+#library(gifski)
 library(tidyverse)
+
+## Register Google API key if not already registered
+
+register_google("AIzaSyCAUmkKYVIMYg8rTYw2ex4tgpe-Qbr7F3E")
 
 
 ################################################################################
@@ -24,8 +30,8 @@ library(tidyverse)
 
 #####Read in Grab sample data#####
 #GRABS<-read.csv(file="C:/Users/ctw1/Box/Data/Analysis/Dams/Data/Reservoir_Grab_2022-05-09.csv",header=TRUE,stringsAsFactors=FALSE)
-GRABS<-read.csv(file="Data/Reservoir_Grab_2022-05-09.csv",header=TRUE,stringsAsFactors=FALSE)
-GRABS$DateTime<-as.POSIXct(strptime(paste(GRABS$Date,GRABS$Time),format="%m/%d/%y %H:%M",tz="America/New_York"))
+GRABS<-read.csv(file="Data/Reservoir_Grab_2022-09-14.csv",header=TRUE,stringsAsFactors=FALSE)
+GRABS$DateTime<-as.POSIXct(strptime(paste(GRABS$Date,GRABS$Time),format="%m/%d/%Y %H:%M",tz="America/New_York"))
 attributes(GRABS$DateTime)$tzone<-"EST"
 GRABS$Date<-as.POSIXct(strptime(GRABS$Date,format="%m/%d/%Y"))
 GRABS$Year<-as.numeric(format(GRABS$Date,"%Y"))
@@ -121,40 +127,6 @@ GRABS[,c(26:37)][GRABS[,c(26:37)] < 0] <- 0
 
 
 
-
-
-
-
-# This was done already and the resulting dataframe was stored in the 'Data' directory#####
-# ## Import CC discharge data
-# CCQ <- read.csv(file="C:/Users/ctw1/Box/Data/Analysis/CCBP_CH4/Data/CC_Q_Daily_2022-05-09.csv", header=TRUE, stringsAsFactors = FALSE)
-# CCQ$Date <- as.Date(CCQ$Date,format="%Y-%m-%d")
-# 
-# ## Scale to individual sampling locations
-# CCBPQ <- data.frame(Date = CCQ$Date, Discharge.m3s = (0.078275/4.63) * (CCQ$Discharge.Ls/1000), Site  ="CCBP", Sample = "CCBP_UP_3")
-# CCBPQ <- rbind(CCBPQ, data.frame(Date = CCQ$Date, Discharge.m3s = (0.554225/4.63) * (CCQ$Discharge.Ls/1000), Site  ="CCBP", Sample = "CCBP_UP_2"))
-# CCBPQ <- rbind(CCBPQ, data.frame(Date = CCQ$Date, Discharge.m3s = (0.91245/4.63) * (CCQ$Discharge.Ls/1000), Site  ="CCBP", Sample = "CCBP_UP_1"))
-# CCBPQ <- rbind(CCBPQ, data.frame(Date = CCQ$Date, Discharge.m3s = (1.72665/4.63) * (CCQ$Discharge.Ls/1000), Site  ="CCBP", Sample = "CCBP_OUT"))
-# CCBPQ <- rbind(CCBPQ, data.frame(Date = CCQ$Date, Discharge.m3s = (3.962682/4.63) * (CCQ$Discharge.Ls/1000), Site  ="CCBP", Sample = "CCBP_Side"))
-# CCBPQ <- rbind(CCBPQ, data.frame(Date = CCQ$Date, Discharge.m3s = (CCQ$Discharge.Ls/1000), Site  ="CCBP", Sample = "CC"))
-# 
-# 
-# 
-# ## Import Oyster discharge data
-# OYSQ <- read.csv(file="C:/Users/ctw1/Box/Data/Analysis/CCBP_CH4/Data/Oyster_Q_Daily_2022-05-09.csv", header=TRUE, stringsAsFactors = FALSE)
-# OYSQ$Date <- as.Date(OYSQ$Date,format="%Y-%m-%d")
-# 
-# ## Scale to individual sampling locations
-# DBBPQ <- data.frame(Date = OYSQ$Date, Discharge.m3s = (2.58999/31.33886) * OYSQ$Discharge.m3s, Site  ="DBBP", Sample = "DBBP_UP")
-# DBBPQ <- rbind(DBBPQ, data.frame(Date = OYSQ$Date, Discharge.m3s = (3.263385/31.33886) * OYSQ$Discharge.m3s, Site  ="DBBP", Sample = "DBBP_OUT"))
-# 
-# BPQ <- bind_rows(CCBPQ, DBBPQ)
-# 
-# write.csv(Q_Daily, file="Data/BPQ_2022-05-09.csv",row.names=FALSE)
-# 
-# rm(CCBPQ, CCQ, OYSQ, DBBPQ)
-#####
-
 ################################################################################
 ## Processing of data
 ################################################################################
@@ -170,10 +142,10 @@ GRABS <- GRABS %>% left_join(., BPQ, by = c("Site", "Sample", "Date"))
 
 
 ## Weight nutrient concentrations by catchment area for calculating removal
-GRABS <- GRABS %>% select(-c(CO2.ppm,UNH_ID, Gas_Flag, NAr_sat:NAr_calc.C, N2.mM.A:N2.mM.C)) %>%
-  mutate(across(Cond.uScm:N2.mM.mean, .fns = ~.x * CArea.km2, .names="{.col}CA")) %>%
-  rename_with(~str_remove(., "\\.mgL|\\.ugL|\\.C|\\.uScm|\\.mM"), .cols = (c(Cond.uScmCA:Temp.CCA, pHCA:N2.mM.meanCA)))
-  
+GRABS <- GRABS %>% select(-c(CO2.ppm,UNH_ID, Gas_Flag, NAr_sat:NAr_calc.C, N2.mM.A:N2.mM.C)) %>% #Selects variables I want
+  mutate(across(Cond.uScm:N2.mM.mean, .fns = ~.x * CArea.km2, .names="{.col}CA")) %>% #Weight by CArea
+  rename_with(~str_remove(., "\\.mgL|\\.ugL|\\.C|\\.uScm|\\.mM"), .cols = (c(Cond.uScmCA:Temp.CCA, pHCA:N2.mM.meanCA))) #Remove units from weighted names
+## Weight nutrient concentrations by discharge for calculating removal  
 GRABS <-  GRABS %>% mutate(across(Cond.uScm:N2.mM.mean, .fns = ~.x * (Discharge.m3s * 1000) * 86400 * 365 / 1e+6 / CArea.km2, .names="{.col}.kgkm2Day")) %>%
   rename_with(~str_remove(., "\\.mgL|\\.ugL|\\.C|\\.uScm|\\.mM"), .cols = (c(Cond.uScm.kgkm2Day:Temp.C.kgkm2Day, pH.kgkm2Day:N2.mM.mean.kgkm2Day)))
 
@@ -189,9 +161,9 @@ Removal<-GRABS[grep("UP",GRABS$Location),]
 
 ## Aggregate multiple "UP" samples into a single "UP" 
 
-Removal <- Removal %>%  select(c(2, 4, 6:25, 27:37, 42, 44, 47:66, 68:81)) %>% 
+Removal <- Removal %>%  select(c(2, 4, 6:25, 27:37, 42, 44, 47:81, 83:115)) %>% # was: 47:66, 68:81
   group_by(across(all_of(c("Site", "Date")))) %>% summarize_all(sum) %>%
-  left_join(., filter(GRABS, Location == "OUT"), by=c("Date", "Site"), suffix = c(".UP",".OUT"))
+  left_join(., filter(GRABS, Location == "OUT"), by=c("Date", "Site"), suffix = c(".UP",".OUT")) %>% as.data.frame()
 
 ## Add DOC:DON into Removal df
 Removal$DOCtoDON.UP <- Removal$DOCCA.UP / Removal$DONCA.UP
@@ -199,7 +171,16 @@ Removal$DOCtoDON.OUT <- Removal$DOCCA.OUT / Removal$DONCA.OUT
 Removal$DOCtoTDN.UP <- Removal$DOCCA.UP / Removal$TDNCA.UP
 Removal$DOCtoTDN.OUT <- Removal$DOCCA.OUT / Removal$TDNCA.OUT
 
+##### Trying to fix this shit
 
+Removal$RNO3 <- with(Removal, (NO3.kgkm2Day.UP - NO3.kgkm2Day.OUT)/NO3.kgkm2Day.UP)
+Removal$RNO3 <- with(Removal, (NO3CA.UP - NO3CA.OUT)/NO3CA.UP)
+Removal$RNO3 <- with(Removal,((NO3.mgL.UP * CArea.km2.UP)-NO3CA.OUT)/(NO3.mgL.UP * CArea.km2.UP))
+
+tmpNO3 <- Removal %>% select(c(Site, Date)) %>% as.data.frame()
+tmpNO3$RNO3_1 <- with(Removal, (NO3.kgkm2Day.UP - NO3.kgkm2Day.OUT)/NO3.kgkm2Day.UP)
+tmpNO3$RNO3_2 <- with(Removal, (NO3CA.UP - NO3CA.OUT)/NO3CA.UP)
+tmpNO3$RNO3_3 <- with(Removal, ((NO3.mgL.UP * CArea.km2.UP)-NO3CA.OUT)/(NO3.mgL.UP * CArea.km2.UP))
 
 ## Need to fix the below abomination...
 
@@ -234,6 +215,72 @@ Removal$RDOCtoDON<-with(Removal,((DOCtoDON.UP-DOCtoDON.OUT)/DOCtoDON.UP))
 Removal$RDOCtoTDN<-with(Removal,((DOCtoTDN.UP-DOCtoTDN.OUT)/DOCtoTDN.UP))
 
 
+Removal$RNO32 <- with(Removal,(((NO3.mgL.UP*CArea.km2.UP)-NO3CA.OUT)/(NO3.mgL.UP*CArea.km2.UP)))
+
+
+## Removal dataframe
+Removal$RSpCond<-with(Removal,((Sp_Cond.uScm.UP * CArea.km2.UP)-Sp_CondCA.OUT)/(Sp_Cond.uScm.UP * CArea.km2.UP))
+Removal$RTemp<-with(Removal,((TempCA.UP * CArea.km2.UP)-TempCA.OUT)/(Temp.C.UP * CArea.km2.UP))
+Removal$RDO.mgL<-with(Removal,((DO.mgL.UP * CArea.km2.UP)-DO.mgLCA.OUT)/(DO.mgL.UP * CArea.km2.UP))
+Removal$RDO.pct<-with(Removal,((DO.pct.UP * CArea.km2.UP)-DO.pctCA.OUT)/(DO.pct.UP * CArea.km2.UP))
+Removal$RTSS<-with(Removal,((TSS.mgL.UP * CArea.km2.UP)-TSSCA.OUT)/(TSS.mgL.UP * CArea.km2.UP))
+Removal$RChl<-with(Removal,((Chl.mgL.UP * CArea.km2.UP)-ChlCA.OUT)/(Chl.mgL.UP * CArea.km2.UP))
+Removal$RPO4<-with(Removal,((PO4.ugL.UP * CArea.km2.UP)-PO4CA.OUT)/(PO4.ugL.UP * CArea.km2.UP))
+Removal$RNH4<-with(Removal,((NH4.ugL.UP * CArea.km2.UP)-NH4CA.OUT)/(NH4.ugL.UP * CArea.km2.UP))
+Removal$RCl<-with(Removal,((Cl.mgL.UP * CArea.km2.UP)-ClCA.OUT)/(Cl.mgL.UP * CArea.km2.UP))
+Removal$RNO3<-with(Removal,((NO3.mgL.UP * CArea.km2.UP)-NO3CA.OUT)/(NO3.mgL.UP * CArea.km2.UP))
+Removal$RSO4<-with(Removal,((SO4.mgL.UP * CArea.km2.UP)-SO4CA.OUT)/(SO4.mgL.UP * CArea.km2.UP))
+Removal$RBr<-with(Removal,((Br.mgL.UP * CArea.km2.UP)-BrCA.OUT)/(Br.mgL.UP * CArea.km2.UP))
+Removal$RDOC<-with(Removal,((DOC.mgL.UP * CArea.km2.UP)-DOCCA.OUT)/(DOC.mgL.UP * CArea.km2.UP))
+Removal$RTDN<-with(Removal,((TDN.mgL.UP * CArea.km2.UP)-TDNCA.OUT)/(TDNCA.UP * CArea.km2.UP))
+Removal$RDON<-with(Removal,((DON.mgL.UP * CArea.km2.UP)-DONCA.OUT)/(DONCA.UP * CArea.km2.UP))
+Removal$RDIN<-with(Removal,((DIN.mgL.UP * CArea.km2.UP)-DINCA.OUT)/(DINCA.UP * CArea.km2.UP))
+Removal$RTDP<-with(Removal,((TDP.mgL.UP * CArea.km2.UP)-TDPCA.OUT)/(TDPCA.UP * CArea.km2.UP))
+Removal$RN2O<-with(Removal,((N2O.mM.UP * CArea.km2.UP)-N2OCA.OUT)/(N2OCA.UP * CArea.km2.UP))
+Removal$RCH4<-with(Removal,((CH4.mM.UP * CArea.km2.UP)-CH4CA.OUT)/(CH4CA.UP * CArea.km2.UP))
+#Removal$RAFDM<-with(Removal,((AFDM.mgLCA.UP-AFDM.mgLCA.OUT)/AFDM.mgLCA.UP))
+#Removal$RAsh<-with(Removal,((Ash.mgLCA.UP-Ash.mgLCA.OUT)/Ash.mgLCA.UP))
+Removal$RPC<-with(Removal,((PC.mgL.UP * CArea.km2.UP)-PCCA.OUT)/(PCCA.UP * CArea.km2.UP))
+Removal$RPN<-with(Removal,((PN.mgL.UP * CArea.km2.UP)-PNCA.OUT)/(PNCA.UP * CArea.km2.UP))
+Removal$RTN<-with(Removal,((TN.mgL.UP * CArea.km2.UP)-TNCA.OUT)/(TNCA.UP * CArea.km2.UP))
+Removal$RNAr<-with(Removal,((NArcalc.mean.UP * CArea.km2.UP)-NArcalc.meanCA.OUT)/(NArcalc.meanCA.UP * CArea.km2.UP))
+Removal$RN2<-with(Removal,((N2.mM.mean.UP * CArea.km2.UP)-N2.meanCA.OUT)/(N2.meanCA.UP * CArea.km2.UP))
+Removal$RDOCtoDON<-with(Removal,((DOCtoDON.UP-DOCtoDON.OUT)/DOCtoDON.UP))
+Removal$RDOCtoTDN<-with(Removal,((DOCtoTDN.UP-DOCtoTDN.OUT)/DOCtoTDN.UP))
+
+with(Removal, (NO3.kgkm2Day.UP - NO3.kgkm2Day.OUT)/NO3.kgkm2Day.UP)
+
+## Removal dataframe
+Removal$RSpCond<-with(Removal,((Sp_Cond.kgkm2Day.UP-Sp_Cond.kgkm2Day.OUT)/Sp_Cond.kgkm2Day.UP))
+Removal$RTemp<-with(Removal,((Temp.kgkm2Day.UP-Temp.kgkm2Day.OUT)/Temp.kgkm2Day.UP))
+Removal$RDO.mgL<-with(Removal,((DO.mgL.kgkm2Day.UP-DO.mgL.kgkm2Day.OUT)/DO.mgL.kgkm2Day.UP))
+Removal$RDO.pct<-with(Removal,((DO.pct.kgkm2Day.UP-DO.pct.kgkm2Day.OUT)/DO.pct.kgkm2Day.UP))
+Removal$RTSS<-with(Removal,((TSS.kgkm2Day.UP-TSS.kgkm2Day.OUT)/TSS.kgkm2Day.UP))
+Removal$RChl<-with(Removal,((Chl.kgkm2Day.UP-Chl.kgkm2Day.OUT)/Chl.kgkm2Day.UP))
+Removal$RPO4<-with(Removal,((PO4.kgkm2Day.UP-PO4.kgkm2Day.OUT)/PO4.kgkm2Day.UP))
+Removal$RNH4<-with(Removal,((NH4.kgkm2Day.UP-NH4.kgkm2Day.OUT)/NH4.kgkm2Day.UP))
+Removal$RCl<-with(Removal,((Cl.kgkm2Day.UP-Cl.kgkm2Day.OUT)/Cl.kgkm2Day.UP))
+Removal$RNO3<-with(Removal,((NO3.kgkm2Day.UP-NO3.kgkm2Day.OUT)/NO3.kgkm2Day.UP))
+Removal$RSO4<-with(Removal,((SO4.kgkm2Day.UP-SO4.kgkm2Day.OUT)/SO4.kgkm2Day.UP))
+Removal$RBr<-with(Removal,((Br.kgkm2Day.UP-Br.kgkm2Day.OUT)/Br.kgkm2Day.UP))
+Removal$RDOC<-with(Removal,((DOC.kgkm2Day.UP-DOC.kgkm2Day.OUT)/DOC.kgkm2Day.UP))
+Removal$RTDN<-with(Removal,((TDN.kgkm2Day.UP-TDN.kgkm2Day.OUT)/TDN.kgkm2Day.UP))
+Removal$RDON<-with(Removal,((DON.kgkm2Day.UP-DON.kgkm2Day.OUT)/DON.kgkm2Day.UP))
+Removal$RDIN<-with(Removal,((DIN.kgkm2Day.UP-DIN.kgkm2Day.OUT)/DIN.kgkm2Day.UP))
+Removal$RTDP<-with(Removal,((TDP.kgkm2Day.UP-TDP.kgkm2Day.OUT)/TDP.kgkm2Day.UP))
+Removal$RN2O<-with(Removal,((N2O.kgkm2Day.UP-N2O.kgkm2Day.OUT)/N2O.kgkm2Day.UP))
+Removal$RCH4<-with(Removal,((CH4.kgkm2Day.UP-CH4.kgkm2Day.OUT)/CH4.kgkm2Day.UP))
+#Removal$RAFDM<-with(Removal,((AFDM.mgL.kgkm2Day.UP-AFDM.mgL.kgkm2Day.OUT)/AFDM.mgL.kgkm2Day.UP))
+#Removal$RAsh<-with(Removal,((Ash.mgL.kgkm2Day.UP-Ash.mgL.kgkm2Day.OUT)/Ash.mgL.kgkm2Day.UP))
+Removal$RPC<-with(Removal,((PC.kgkm2Day.UP-PC.kgkm2Day.OUT)/PC.kgkm2Day.UP))
+Removal$RPN<-with(Removal,((PN.kgkm2Day.UP-PN.kgkm2Day.OUT)/PN.kgkm2Day.UP))
+Removal$RTN<-with(Removal,((TN.kgkm2Day.UP-TN.kgkm2Day.OUT)/TN.kgkm2Day.UP))
+Removal$RNAr<-with(Removal,((NAr.kgkm2Daylc.mean.kgkm2Day.UP-NAr.kgkm2Daylc.mean.kgkm2Day.OUT)/NAr.kgkm2Daylc.mean.kgkm2Day.UP))
+Removal$RN2<-with(Removal,((N2.mean.kgkm2Day.UP-N2.mean.kgkm2Day.OUT)/N2.mean.kgkm2Day.UP))
+Removal$RDOCtoDON<-with(Removal,((DOCtoDON.UP-DOCtoDON.OUT)/DOCtoDON.UP))
+Removal$RDOCtoTDN<-with(Removal,((DOCtoTDN.UP-DOCtoTDN.OUT)/DOCtoTDN.UP))
+
+
 ## Create flag for Cl values using original idea of 10% per input
 Removal$RFlag<-ifelse(Removal$RCl > 0.3 | Removal$RCl < -0.3, 1, 0)
 ## Create second RFlag set at ±20% (standard for reservoir sites)
@@ -264,22 +311,540 @@ Removal$DOY<-as.POSIXlt(Removal$Date)$yday+1
 
 ################### INTERNAL SAMPLING DATA
 
+## Calculate means by sample location and reduce
+
 Means <- Internal %>% group_by(Sample) %>% summarize(across(c(Cond.uScm:DON.mgL), ~mean(., na.rm=TRUE)))
 
 
 
+## ggmap heatmap
+
+CCBPmapInternal <- get_googlemap(center=c(lon = -70.9203, lat = 42.772258), 
+                                 maptype = "satellite", zoom = 17) #18
+
+ggmap(CCBPmapInternal)
+
+# InternalNO3 <- ggmap(CCBPmapInternal)+
+#   stat_density2d(data = Internal, aes(x = Longitude, y = Latitude, fill = ..level.., alpha = ..level..),
+#                  geom = "polygon", bins = 16, size = 0.01)+
+#   scale_fill_gradient(low = "green", high = "red")+
+#   scale_alpha(range = c(0, 0.3))
+
+## Interpolate NO3
+
+## Akima intepolation is kind of sloppy. Need a different method that works better for such a small scale
+NO3interp <- with(Means[!Means$Sample == "CC" & !Means$Sample == "CC_UPPER",], 
+            akima::interp(x = Longitude, y = Latitude, z = NO3.mgL, 
+                          xo = seq(min(Means$Longitude), max(Means$Longitude), length = 200), 
+                          yo = seq(min(Means$Latitude), max(Means$Latitude), length = 200), linear = FALSE))
+
+NO3df <- reshape2::melt(NO3interp$z, na.rm = TRUE)
+names(NO3df) <- c("x", "y", "NO3.mgL")
+NO3df$lon <- NO3interp$x[NO3df$x]
+NO3df$lat <- NO3interp$y[NO3df$y]
+
+
+## Import CCBP outline
+
+CCBPOutline <- readOGR("Data/Spatial/CCBP_Polygon/CCBP_poly.shp")
+CCBPOutline <- readOGR("Data/Spatial/CCBP_poly_simple/CCBP_poly_simple.shp")
+CCBPOutline <- read_sf("Data/Spatial/CCBP_poly_simple/CCBP_poly_simple.shp")
+CCBPOutline4326 <- st_transform(CCBPOutline, "EPSG:4326")
+
+coordinates(Means) = ~Longitude + Latitude
+Means4326 <- spTransform(Means, "EPSG:4326")
+
+InternalNO3 <- ggmap(CCBPmapInternal)+
+  coord_sf(crs=4326,xlim=c(-7897580, -7893501 ), ylim=c(5273954, 5278369))+
+  geom_sf(data=CCBPOutline4326, inherit.aes=FALSE, color="blue", size=1)+
+  #geom_point(data=Means,aes(x=Longitude,y=Latitude, fill = NO3.mgL),size=4)+
+  geom_tile(data = NO3df, aes(x = lon, y = lat, fill = NO3.mgL), alpha = 0.8)+
+  #stat_contour(data = NO3df, aes(x = lon, y = lat, z = NO3.mgL))+
+  scale_fill_continuous(low = "green", high = "red")
+  #coord_map()
+
+InternalNO3
+
+
+## Using spatstat
+## https://stackoverflow.com/questions/35617548/confining-an-idw-interpolation-to-a-polygon-in-rspatstat
+
+## Using subset of original Means data
+
+NO3dfSS <- Means %>% select(c("Latitude", "Longitude", "NO3.mgL"))
+
+NO3dfSS <- ppp(NO3dfSS$Longitude, NO3dfSS$Latitude, poly = NO3dfSS)
+
+marks(NO3dfSS) <- NO3dfSS$NO3.mgL
+
+
+## Using gstat and sp
+## https://rspatial.org/raster/analysis/4-interpolation.html
+
+MeansSP <- SpatialPoints(Means[,11:10], proj4string = CRS("+proj=longlat +datum=NAD83"))
+MeansSP <-  SpatialPointsDataFrame(MeansSP, Means)
+
+Means4326 <- st_transform(Means, "EPSG:4326")
+CCBPOutline4326 <- st_transform(CCBPOutline, "EPSG:4326")
+
+CCBPOutline4326 <- spTransform(CCBPOutline, "EPSG:4326")
+
+spplot(MeansSP, 'NO3.mgL')
+
+
+r <- raster(CCBPOutline4326, res = 10000)
+gs <- gstat(formula = NO3.mgL~1, locations = Means4326)
+idw <- interpolate(r, gs)
+
+## Using gstat and sp
+## https://stackoverflow.com/questions/39591240/spatial-interpolation-error-using-idw/39623736#39623736
+
+## Using original 'Means' data
+
+x.range <- range(Means[!Means$Sample == "CC" & !Means$Sample == "CC_UPPER",]$Longitude)
+y.range <- range(Means[!Means$Sample == "CC" & !Means$Sample == "CC_UPPER",]$Latitude)
+
+x.range <- c(min(Means[!Means$Sample == "CC" & !Means$Sample == "CC_UPPER",]$Longitude),
+             -70.919)
+y.range <- c(min(Means[!Means$Sample == "CC" & !Means$Sample == "CC_UPPER",]$Latitude),
+             42.773)
+
+#x.range = range(CCBPOutline$)
+
+x<-seq(x.range[1], x.range[2], length.out=200)
+y<-seq(y.range[1], y.range[2], length.out=200)
+grd<-expand.grid(x,y)
+
+#coordinates(Means) = ~Longitude+Latitude
+coordinates(grd) <- ~ Var1+Var2
+gridded(grd) <- TRUE
+
+#proj4string(Means) <- CRS("+proj=longlat +datum=NAD83")
+proj4string(grd) <- CRS("+proj=longlat +datum=NAD83")
+
+plot(grd, cex=1.5)
+
+NO3.idw <- idw(formula=NO3.mgL ~ 1, locations = Means, newdata = grd, idp = 2.0)
+NH4.idw <- idw(formula=NH4.ugL ~ 1, locations = Means, newdata = grd, idp = 2.0)
+DIN.idw <- idw(formula=DIN.mgL ~ 1, locations = Means, newdata = grd, idp = 2.0)
+DON.idw <- idw(formula=DON.mgL ~ 1, locations = Means, newdata = grd, idp = 2.0)
+TDN.idw <- idw(formula=TDN.mgL ~ 1, locations = Means, newdata = grd, idp = 2.0)
+DOpct.idw <- idw(formula=DO.pct ~ 1, locations = Means, newdata = grd, idp = 2.0)
+DOmgL.idw <- idw(formula=DO.mgL ~ 1, locations = Means, newdata = grd, idp = 2.0)
+ClmgL.idw <- idw(formula=Cl.mgL ~ 1, locations = Means, newdata = grd, idp = 2.0)
+
+
+
+## Convert dat.idw to raster
+r.NO3.idw <- raster(NO3.idw)
+r.NH4.idw <- raster(NH4.idw)
+r.DIN.idw <- raster(DIN.idw)
+r.DON.idw <- raster(DON.idw)
+r.TDN.idw <- raster(TDN.idw)
+r.DOpct.idw <- raster(DOpct.idw)
+r.DOmgL.idw <- raster(DOmgL.idw)
+r.ClmgL.idw <- raster(ClmgL.idw)
+
+
+## Convert to same CRS
+#r.NO3.idw <- r.NO3.idw %>% st_transform(st_crs(CCBPOutline))
+
+sr <- "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs";
+
+## Reproject raster in EPSG:4326
+
+r.NO3.idw.RP <- projectRaster(r.NO3.idw, crs = sr)
+r.NH4.idw.RP <- projectRaster(r.NH4.idw, crs = sr)
+r.DIN.idw.RP <- projectRaster(r.DIN.idw, crs = sr)
+r.DON.idw.RP <- projectRaster(r.DON.idw, crs = sr)
+r.TDN.idw.RP <- projectRaster(r.TDN.idw, crs = sr)
+r.DOpct.idw.RP <- projectRaster(r.DOpct.idw, crs = sr)
+r.DOmgL.idw.RP <- projectRaster(r.DOmgL.idw, crs = sr)
+r.ClmgL.idw.RP <- projectRaster(r.ClmgL.idw, crs = sr)
+
+
+
+r.NO3.crop <- crop(r.NO3.idw.RP, extent(CCBPOutline4326))
+r.NH4.crop <- crop(r.NH4.idw.RP, extent(CCBPOutline4326))
+r.DIN.crop <- crop(r.DIN.idw.RP, extent(CCBPOutline4326))
+r.DON.crop <- crop(r.DON.idw.RP, extent(CCBPOutline4326))
+r.TDN.crop <- crop(r.TDN.idw.RP, extent(CCBPOutline4326))
+r.DOpct.crop <- crop(r.DOpct.idw.RP, extent(CCBPOutline4326))
+r.DOmgL.crop <- crop(r.DOmgL.idw.RP, extent(CCBPOutline4326))
+r.ClmgL.crop <- crop(r.ClmgL.idw.RP, extent(CCBPOutline4326))
+
+
+r.NO3.mask <- mask(r.NO3.crop, CCBPOutline4326)
+r.NH4.mask <- mask(r.NH4.crop, CCBPOutline4326)
+r.DIN.mask <- mask(r.DIN.crop, CCBPOutline4326)
+r.DON.mask <- mask(r.DON.crop, CCBPOutline4326)
+r.TDN.mask <- mask(r.TDN.crop, CCBPOutline4326)
+r.DOpct.mask <- mask(r.DOpct.crop, CCBPOutline4326)
+r.DOmgL.mask <- mask(r.DOmgL.crop, CCBPOutline4326)
+r.ClmgL.mask <- mask(r.ClmgL.crop, CCBPOutline4326)
+
+
+NO3.idw <- as.data.frame(rasterToPoints(r.NO3.mask))
+NH4.idw <- as.data.frame(rasterToPoints(r.NH4.mask))
+DIN.idw <- as.data.frame(rasterToPoints(r.DIN.mask))
+DON.idw <- as.data.frame(rasterToPoints(r.DON.mask))
+TDN.idw <- as.data.frame(rasterToPoints(r.TDN.mask))
+DOpct.idw <- as.data.frame(rasterToPoints(r.DOpct.mask))
+DOmgL.idw <- as.data.frame(rasterToPoints(r.DOmgL.mask))
+ClmgL.idw <- as.data.frame(rasterToPoints(r.ClmgL.mask))
+
+NH4.idw$var1.pred <- NH4.idw$var1.pred/1000
+
+mid <- function(x) {
+ MP <- (min(x) + max(x))/2
+ return(MP)
+}
+
+NO3idw<- ggmap(CCBPmapInternal)+
+  geom_sf(data=CChydroArc4326, inherit.aes=FALSE, color="blue", size=1)+
+  geom_sf(data=CChydroPoly4326, inherit.aes=FALSE, color="blue",fill="blue")+
+  geom_point(data=NO3.idw, aes(x=x, y=y, color=var1.pred))+
+  #geom_point(data=Means, aes(x=Longitude, y=Latitude, color = NO3.mgL), size=4)+
+  #geom_sf(data=CCBPOutline4326, inherit.aes=FALSE, color="blue",fill = NA, size=1, alpha = 0.8)+
+  scale_color_gradient2(name=expression(bold(NO[3]~(mg~L^-1))),low="darkblue",mid="green",high="red",midpoint=0.01, n.breaks = 3)+
+  theme_bw()+
+  theme(axis.text = element_blank(),
+        axis.title = element_blank(),
+        legend.position = "right",
+        legend.direction = "vertical",
+        #legend.title = element_blank())+
+        #legend.position = c(0.89,0.5),
+        #legend.background = element_rect(fill = "white", color = "black"),
+        legend.title = element_text(size = 8),
+        legend.margin = margin(0, 0, 0, 0, "pt"),
+        plot.margin = margin(1,0,-10,0, "pt"),
+        legend.text = element_text(size = 8, angle = 0, hjust = 1))+
+  guides(color = guide_colorbar(label.hjust = 0.75, title.position = "top", title.hjust = 0.5))
+
+NO3idw
+
+
+NH4idw<- ggmap(CCBPmapInternal)+
+  geom_sf(data=CChydroArc4326, inherit.aes=FALSE, color="blue", size=1)+
+  geom_sf(data=CChydroPoly4326, inherit.aes=FALSE, color="blue",fill="blue")+
+  geom_point(data=NH4.idw, aes(x=x, y=y, color=var1.pred))+
+  #geom_point(data=Means, aes(x=Longitude, y=Latitude, color = NO3.mgL), size=4)+
+  #geom_sf(data=CCBPOutline4326, inherit.aes=FALSE, color="blue",fill = NA, size=1, alpha = 0.8)+
+  scale_color_gradient2(name=expression(bold(NH[4]~(mu*g~L^-1))),low="darkblue",mid="green",high="red",midpoint=0.12, breaks = c(0.025, 0.12, 0.22))+
+  theme_bw()+
+  theme(axis.text = element_blank(),
+        axis.title = element_blank(),
+        legend.position = "right",
+        legend.direction = "vertical",
+        #legend.title = element_blank())+
+        #legend.position = c(0.89,0.5),
+        #legend.background = element_rect(fill = "white", color = "black"),
+        legend.title = element_text(size = 8),
+        legend.margin = margin(0, 0, 0, 0, "pt"),
+        #plot.margin = margin(1,0,0,0, "pt"),
+        legend.text = element_text(size = 8, angle = 0, hjust = 1))+
+  guides(color = guide_colorbar(label.hjust = 0.75, title.position = "top", title.hjust = 0.5))
+
+NH4idw
+
+ggsave(file = paste0("Plots/IDW_NH4_", Sys.Date(), ".png"), NH4idw)
+
+DINidw<- ggmap(CCBPmapInternal)+
+  geom_sf(data=CChydroArc4326, inherit.aes=FALSE, color="blue", size=1)+
+  geom_sf(data=CChydroPoly4326, inherit.aes=FALSE, color="blue",fill="blue")+
+  geom_point(data=DIN.idw, aes(x=x, y=y, color=var1.pred))+
+  #geom_point(data=Means, aes(x=Longitude, y=Latitude, color = NO3.mgL), size=4)+
+  #geom_sf(data=CCBPOutline4326, inherit.aes=FALSE, color="blue",fill = NA, size=1, alpha = 0.8)+
+  scale_color_gradient2(name=expression(bold(DIN~(mg~L^-1))),low="darkblue",mid="green",high="red",midpoint=0.18, breaks = c(0.07, 0.18, 0.30))+
+  theme_bw()+
+  theme(axis.text = element_blank(),
+        axis.title = element_blank(),
+        legend.position = "right",
+        legend.direction = "vertical",
+        #legend.title = element_blank())+
+        #legend.position = c(0.89,0.5),
+        #legend.background = element_rect(fill = "white", color = "black"),
+        legend.title = element_text(size = 8),
+        legend.margin = margin(0, 0, 0, 0, "pt"),
+        #plot.margin = margin(1,0,0,0, "pt"),
+        legend.text = element_text(size = 8, angle = 0, hjust = 1))+
+  guides(color = guide_colorbar(label.hjust = 0.75, title.position = "top", title.hjust = 0.5))
+
+DINidw
+
+
+DONidw<- ggmap(CCBPmapInternal)+
+  geom_sf(data=CChydroArc4326, inherit.aes=FALSE, color="blue", size=1)+
+  geom_sf(data=CChydroPoly4326, inherit.aes=FALSE, color="blue",fill="blue")+
+  geom_point(data=DON.idw, aes(x=x, y=y, color=var1.pred))+
+  #geom_point(data=Means, aes(x=Longitude, y=Latitude, color = NO3.mgL), size=4)+
+  #geom_sf(data=CCBPOutline4326, inherit.aes=FALSE, color="blue",fill = NA, size=1, alpha = 0.8)+
+  scale_color_gradient2(name=expression(bold(DON~(mg~L^-1))),low="darkblue",mid="green",high="red",midpoint=0.31, breaks = c(0.27, 0.31, 0.36))+
+  theme_bw()+
+  theme(axis.text = element_blank(),
+        axis.title = element_blank(),
+        legend.position = "right",
+        legend.direction = "vertical",
+        #legend.title = element_blank())+
+        #legend.position = c(0.89,0.5),
+        #legend.background = element_rect(fill = "white", color = "black"),
+        legend.title = element_text(size = 8),
+        legend.margin = margin(0, 0, 0, 0, "pt"),
+        #plot.margin = margin(0,0,0,0, "pt"),
+        legend.text = element_text(size = 8, angle = 0, hjust = 1))+
+  guides(color = guide_colorbar(label.hjust = 0.75, title.position = "top", title.hjust = 0.5))
+
+DONidw
+
+
+TDNidw<- ggmap(CCBPmapInternal)+
+  geom_sf(data=CChydroArc4326, inherit.aes=FALSE, color="blue", size=1)+
+  geom_sf(data=CChydroPoly4326, inherit.aes=FALSE, color="blue",fill="blue")+
+  geom_point(data=TDN.idw, aes(x=x, y=y, color=var1.pred))+
+  #geom_point(data=Means, aes(x=Longitude, y=Latitude, color = NO3.mgL), size=4)+
+  #geom_sf(data=CCBPOutline4326, inherit.aes=FALSE, color="blue",fill = NA, size=1, alpha = 0.8)+
+  scale_color_gradient2(name=expression(bold(TDN~(mg~L^-1))),low="darkblue",mid="green",high="red",midpoint=0.56, breaks = c(0.35, 0.56, 0.80))+
+  theme_bw()+
+  theme(axis.text = element_blank(),
+        axis.title = element_blank(),
+        legend.position = "right",
+        legend.direction = "vertical",
+        #legend.title = element_blank())+
+        #legend.position = c(0.89,0.5),
+        #legend.background = element_rect(fill = "white", color = "black"),
+        legend.title = element_text(size = 8),
+        legend.margin = margin(0, 0, 0, 0, "pt"),
+        #plot.margin = margin(0,0,0,0, "pt"),
+        legend.text = element_text(size = 8, angle = 0, hjust = 1))+
+  guides(color = guide_colorbar(label.hjust = 0.75, title.position = "top", title.hjust = 0.5))
+
+TDNidw
+
+
+
+DOpctidw<- ggmap(CCBPmapInternal)+
+  geom_sf(data=CChydroArc4326, inherit.aes=FALSE, color="blue", size=1)+
+  geom_sf(data=CChydroPoly4326, inherit.aes=FALSE, color="blue",fill="blue")+
+  geom_point(data=DOpct.idw, aes(x=x, y=y, color=var1.pred))+
+  #geom_point(data=Means, aes(x=Longitude, y=Latitude, color = NO3.mgL), size=4)+
+  #geom_sf(data=CCBPOutline4326, inherit.aes=FALSE, color="blue",fill = NA, size=1, alpha = 0.8)+
+  scale_color_gradient2(name=expression(bold(DO~("%"))),low="darkblue",mid="green",high="red",midpoint=30.7, breaks = c(20.0, 30.0, 40.0))+
+  theme_bw()+
+  theme(axis.text = element_blank(),
+        axis.title = element_blank(),
+        legend.position = "right",
+        legend.direction = "vertical",
+        #legend.title = element_blank())+
+        #legend.position = c(0.89,0.5),
+        #legend.background = element_rect(fill = "white", color = "black"),
+        legend.title = element_text(size = 8),
+        legend.margin = margin(0, 0, 0, 0, "pt"),
+        #plot.margin = margin(0,0,0,0, "pt"),
+        legend.text = element_text(size = 8, angle = 0, hjust = 1))+
+  guides(color = guide_colorbar(label.hjust = 0.75, title.position = "top", title.hjust = 0.5))
+
+DOpctidw
+
+
+DOmgLidw<- ggmap(CCBPmapInternal)+
+  geom_sf(data=CChydroArc4326, inherit.aes=FALSE, color="blue", size=1)+
+  geom_sf(data=CChydroPoly4326, inherit.aes=FALSE, color="blue",fill="blue")+
+  geom_point(data=DOmgL.idw, aes(x=x, y=y, color=var1.pred))+
+  #geom_point(data=Means, aes(x=Longitude, y=Latitude, color = NO3.mgL), size=4)+
+  #geom_sf(data=CCBPOutline4326, inherit.aes=FALSE, color="blue",fill = NA, size=1, alpha = 0.8)+
+  scale_color_gradient2(name=expression(bold(DO~("%"))),low="darkblue",mid="green",high="red",midpoint= 2.8, breaks = c(1.0, 2.8, 3.3))+
+  theme_bw()+
+  theme(axis.text = element_blank(),
+        axis.title = element_blank(),
+        legend.position = "bottom",
+        legend.direction = "horizontal",
+        #legend.title = element_blank())+
+        #legend.position = c(0.89,0.5),
+        #legend.background = element_rect(fill = "white", color = "black"),
+        legend.title = element_text(size = 8),
+        legend.margin = margin(0, 0, 0, 0, "pt"))+
+  guides(color = guide_colorbar(label.hjust = 0.75, title.position = "top", title.hjust = 0.5))
+
+DOmgLidw
+
+
+ClmgLidw<- ggmap(CCBPmapInternal)+
+  geom_sf(data=CChydroArc4326, inherit.aes=FALSE, color="blue", size=1)+
+  geom_sf(data=CChydroPoly4326, inherit.aes=FALSE, color="blue",fill="blue")+
+  geom_point(data=ClmgL.idw, aes(x=x, y=y, color=var1.pred))+
+  #geom_point(data=Means, aes(x=Longitude, y=Latitude, color = NO3.mgL), size=4)+
+  #geom_sf(data=CCBPOutline4326, inherit.aes=FALSE, color="blue",fill = NA, size=1, alpha = 0.8)+
+  scale_color_gradient2(name=expression(bold(Cl~(mg~L^-1))),low="darkblue",mid="green",high="red",midpoint=99.00251, n.breaks = 3)+
+  theme_bw()+
+  theme(axis.text = element_blank(),
+        axis.title = element_blank(),
+        legend.position = "bottom",
+        legend.direction = "horizontal",
+        #legend.title = element_blank())+
+        #legend.position = c(0.89,0.5),
+        #legend.background = element_rect(fill = "white", color = "black"),
+        legend.title = element_text(size = 8),
+        legend.margin = margin(0, 0, 0, 0, "pt"))+
+  guides(color = guide_colorbar(label.hjust = 0.75, title.position = "top", title.hjust = 0.5))
+
+ClmgLidw
+
+
+## Plot all species together
+
+ALLidw <- cowplot::plot_grid(NO3idw, NH4idw, DINidw,DONidw, TDNidw, DOpctidw) #, align = "h"
+
+ggsave(file = paste0("Plots/IDW_All_", Sys.Date(), ".png"), ALLidw)
+
+
+egg::ggarrange(NO3idw, NH4idw, DINidw, DONidw, TDNidw, DOpctidw)
+
+## Another way to plot all:
+
+NO3.idw <- NO3.idw %>% mutate(Species = "NO3")
+NH4.idw <- NH4.idw %>% mutate(Species = "NH4")
+DIN.idw <- DIN.idw %>% mutate(Species = "DIN")
+DON.idw <- DON.idw %>% mutate(Species = "DON")
+TDN.idw <- TDN.idw %>% mutate(Species = "TDN")
+DOpct.idw <- DOpct.idw %>% mutate(Species = "DO")
+DOmgL.idw <- DOpct.idw %>% mutate(Species = "DO")
+#DOC.idw <- DOC.idw %>% mutate(Species = "DOC")
+
+## Normalize individual vectors
+
+## Feature Scaling
+NO3.idw <- NO3.idw %>% mutate(valueFS = var1.pred/max(var1.pred))
+NH4.idw <- NH4.idw %>% mutate(valueFS = var1.pred/max(var1.pred))
+DIN.idw <- DIN.idw %>% mutate(valueFS = var1.pred/max(var1.pred))
+DON.idw <- DON.idw %>% mutate(valueFS = var1.pred/max(var1.pred))
+TDN.idw <- TDN.idw %>% mutate(valueFS = var1.pred/max(var1.pred))
+DOpct.idw <- DOpct.idw %>% mutate(valueFS = var1.pred/max(var1.pred))
+DOmgL.idw <- DOmgL.idw %>% mutate(valueFS = var1.pred/max(var1.pred))
+
+## Range scaling
+NO3.idw <- NO3.idw %>% mutate(valueMM = (var1.pred - min(var1.pred))/max(var1.pred - min(var1.pred)))
+NH4.idw <- NH4.idw %>% mutate(valueMM = (var1.pred - min(var1.pred))/max(var1.pred - min(var1.pred)))
+DIN.idw <- DIN.idw %>% mutate(valueMM = (var1.pred - min(var1.pred))/max(var1.pred - min(var1.pred)))
+DON.idw <- DON.idw %>% mutate(valueMM = (var1.pred - min(var1.pred))/max(var1.pred - min(var1.pred)))
+TDN.idw <- TDN.idw %>% mutate(valueMM = (var1.pred - min(var1.pred))/max(var1.pred - min(var1.pred)))
+DOpct.idw <- DOpct.idw %>% mutate(valueMM = (var1.pred - min(var1.pred))/max(var1.pred - min(var1.pred)))
+DOmgL.idw <- DOmgL.idw %>% mutate(valueMM = (var1.pred - min(var1.pred))/max(var1.pred - min(var1.pred)))
+
+
+idwAll <- rbind(NO3.idw, NH4.idw, DIN.idw, DON.idw, TDN.idw, DOmgL.idw)
+
+names(idwAll)[1:3] <- c("lon", "lat", "value")
+
+idwAll$Species_f <- factor(idwAll$Species, levels = c("NO3", "NH4", "DIN", "DON", "TDN", "DO"))
+
+RemovalLong$Season_f <- factor(RemovalLong$Season, levels=c("Spring", "Summer", "Autumn", "Winter"))
+
+
+
+Allidw<- ggmap(CCBPmapInternal)+
+  geom_sf(data=CChydroArc4326, inherit.aes=FALSE, color="blue", size=1)+
+  geom_sf(data=CChydroPoly4326, inherit.aes=FALSE, color="blue",fill="blue")+
+  geom_point(data=idwAll, aes(x=lon, y=lat, color=valueMM))+
+  facet_wrap(~Species_f)+
+  #geom_point(data=Means, aes(x=Longitude, y=Latitude, color = NO3.mgL), size=4)+
+  #geom_sf(data=CCBPOutline4326, inherit.aes=FALSE, color="blue",fill = NA, size=1, alpha = 0.8)+
+  scale_color_gradient2(name=expression(bold(Conc.)),low="darkblue",mid="green",high="red",midpoint=0.5)+
+  theme_bw()+
+  theme(axis.text = element_blank(),
+        axis.title = element_blank(),
+        axis.ticks = element_blank(),
+        strip.background = element_blank(),
+        strip.text = element_text(face = "bold", size = 12),
+        plot.margin = margin(-1,-1,-1,-1, "pt"),
+        panel.border = element_rect(color="black",fill=NA,size=1))
+        #legend.position = "bottom",
+        #legend.direction = "horizontal",
+        #legend.title = element_blank())+
+        #legend.position = c(0.89,0.5),
+        #legend.background = element_rect(fill = "white", color = "black"),
+        #legend.title = element_text(size = 8),
+        #legend.margin = margin(0, 0, 0, 0, "pt"))+
+
+Allidw
+
+ggsave(file = paste0("Plots/All_idw_2_", Sys.Date(), ".png"), Allidw)
+
+
+
+
+## None of this really did what I wanted to do
+
+# NO3idwSF <- NO3idwSF %>% st_transform(st_crs(CCBPOutline))
+# 
+# 
+# 
+# ## Clip to CCBPOutline
+# 
+# ## Convert idw data to Spatial Points Data Frame
+# NO3idwDF <- data.frame(dat.idw)
+# coordinates(NO3idwSPDF) = ~ Var1+Var2
+# proj4string(NO3idwSPDF) <- "+proj=longlat +datum=NAD83"
+# NO3idwSF <- as(NO3idwSPDF, "sf")
+# 
+# dat.idwSPoly <- as(dat.idw, "SpatialPolygons")
+# 
+# ## Convert CCBPOutline shapefile to raster
+# CCBPOutlineraster <- terra::rast(CCBPOutline)
+# CCBPOutlineraster <- stars::st_rasterize(CCBPOutline)
+# CCBPOutlineRaster <- raster(CCBPOutlineraster)
+# projection(CCBPOutlineraster) <- "+proj=longlat +datum=NAD83"
+# crs(CCBPOutlineraster) <- "+proj=longlat +datum=NAD83"
+# 
+# 
+# NO3idwSF <- NO3idwSF %>% st_transform(st_crs(CCBPOutline))
+# 
+# dat.idw2 <- as(dat.idw, "sf") %>% st_transform(st_crs(CCBPOutline))
+# 
+# tmp <- st_crop(dat.idw2, CCBPOutline)
+# 
+# ## Clip
+# tmpcrop <- crop(NO3idwSPDF, CCBPOutlineraster, inverse = FALSE)
+# 
+# ggplot()
+# geom_point(data=NO3idwSPDF, aes(x=))
+# 
+# 
+# NO3tmp <- ggplot()+
+#   geom_point(data=NO3idwSPDF, aes(x=Var1,y=Var2, color = var1.pred))+
+#   #geom_tile(data = idwDF, aes(x = Var1, y = Var2, fill = var1.pred), alpha = 0.8)+
+#   geom_sf(data=CCBPOutline4326, inherit.aes=FALSE, color="blue",fill = NA, size=1, alpha = 0.8)+
+#   scale_color_gradient2(name=expression(bold(Temp~(degree~C))),low="darkblue",mid="green",high="red",midpoint=0.015)
+#   #scale_color_continuous(low = "green", high = "red")
+# NO3tmp
+#   
+# ggsave(file = paste0("Plots/NO3_IDW_", Sys.Date(), ".png"), NO3tmp)  
+#   
+#   
+# 
+# 
+# ## Clip to extent of CCBP
+# 
+# #tmp <- intersect(dat.idw, CCBPOutline)
+
+
+################################################################################
+## Create plots
+################################################################################
+
+
+## Internal sampling plots
+
+
+bboxInternal<-c(-70.925, 42.7675, -70.915149, 42.7750)
+#CCBPmap<-get_stamenmap(bbox, zoom=15, crop=TRUE)
+CCBPmapInternal<-get_map(bboxInternal, zoom=15, crop=TRUE, maptype = "satellite", source = "google")
+ggmap(CCBPmapInternal)
 
 ggplot(data=Means)+
   geom_col(aes(x=Sample,y=TDN.mgL))+
   #facet_wrap(~Sample)+
   theme_bw()+
   theme(axis.text.x = element_text(angle = 45, hjust=1))
-
-
-bboxInternal<-c(-70.925, 42.7675, -70.915149, 42.7750)
-#CCBPmap<-get_stamenmap(bbox, zoom=15, crop=TRUE)
-CCBPmapInternal<-get_map(bboxInternal, zoom=15, crop=TRUE)
-ggmap(CCBPmapInternal)
 
 DINInternal <- ggmap(CCBPmapInternal)+
   geom_point(data=Means, aes(x=Longitude, y=Latitude, color = DIN.mgL), size=4)+
@@ -329,10 +894,7 @@ ggmap(CCBPmap)+
   geom_point(data=Means,(aes(x=Longitude, y=Latitude, color=DIN.mgL)))
 
 
-
-################################################################################
-## Create plots
-################################################################################
+## Long-term Cart Creek data
 
 ## Some plots to show trends in N species from long-term LTER data at CC
 
@@ -395,7 +957,7 @@ NO3SIGMA <- lm(NO3.mgL~Date,SIGMA)
                
                
                
-################### CCBP long-term mass balance
+################### CCBP long-term mass balance #############
 #GRABS$NH4.mgL <- GRABS$NH4.ugL/1000
 
 GRABSlong <- GRABS %>% filter(Site == "CCBP") %>% select(c(Sample:Date,DO.pct, NH4.mgL, NO3.mgL, DOC.mgL, TDN.mgL, DIN.mgL,DON.mgL,
@@ -423,14 +985,20 @@ GRABSlong$Location_f <- factor(GRABSlong$Location, levels=c("UP_1", "UP_2", "UP_
                                labels = c("UP_1" = "Input 1", "UP_2" = "Input 2", "UP_3" = "Input 3",
                                           "SIDE" = "Sidepool", "OUT" = "Output"))
 
+GRABSlong[grep("kgkm2Day",GRABSlong$name),]
+GRABSlong[grep("mgL",GRABSlong$name),]
+
+GRABSlongconc <- GRABSlong[grep("mgL", GRABSlong$name),]
+GRABSlong
 
 
+## Row 154 is fucked in 'GRABS'. Low Cl values and high N values...
 
 CCBP_Cout <- ggplot()+
-  geom_point(data=GRABSlong[!GRABSlong$name == "DO.pct" & GRABSlong$Location == "OUT",], aes(x=Date, y=value))+
-  geom_smooth(data=GRABSlong[!GRABSlong$name == "DO.pct" & GRABSlong$Location == "OUT",], aes(x=Date, y=value), formula = 'y~x', method="lm")+
+  geom_point(data=GRABSlongconc[!GRABSlongconc$name == "DO.pct" & GRABSlongconc$Location == "OUT",], aes(x=Date, y=value))+
+  geom_smooth(data=GRABSlongconc[!GRABSlongconc$name == "DO.pct" & GRABSlongconc$Location == "OUT",], aes(x=Date, y=value), formula = 'y~x', method="lm")+
   labs(x="", y=expression(bold(Concentration~(mgL^-1))))+
-  facet_wrap(~name_f, nrow=3, ncol=2, scales="free_y", labeller = label_parsed)+
+  facet_wrap(~name_f, nrow=2, ncol=3, scales="free_y", labeller = label_parsed)+
   lims(y=c(0,NA))+
   theme_bw()+
   theme(panel.border = element_rect(color="black",fill=NA,size=1), panel.grid.major = element_blank(),
@@ -542,7 +1110,7 @@ mean(GRABS[GRABS$Sample=="CC",]$NO3.mgL,na.rm=TRUE)
 
 
 ## CCBP Removal
-RemovalLong <- Removal %>% filter(Site == "CCBP" & RTDN > -24 & RFlag2 == 0) %>% select(c(Date, HL.myr, Season, RNH4, RNO3, RDOC, RTDN, RDON, RDIN)) %>%
+RemovalLong <- Removal %>% filter(Site == "CCBP" & RTDN > -24 & RFlag2 == 0) %>% select(c(Date, HL.myr, Discharge.m3s.OUT, Season, Temp.C.OUT, RNH4, RNO3, RDOC, RTDN, RDON, RDIN)) %>%
   pivot_longer(cols=c(RNH4:RDIN)) %>% as.data.frame()
 
 
@@ -556,10 +1124,10 @@ RemovalLong$Season_f <- factor(RemovalLong$Season, levels=c("Spring", "Summer", 
 
 CCBPR <- ggplot()+
   geom_point(data=RemovalLong, aes(x=HL.myr, y=-value*100, shape=Season_f), size=1.5, stroke=1.5)+
-  #geom_smooth(data=RemovalLong, aes(x=HL.myr, y=value), formula='y~x', method="lm")+
+  #geom_smooth(data=RemovalLong[RemovalLong$name == "RDOC",], aes(x=HL.myr, y=-value*100), formula='y~x', method="lm", color = "black")+
   geom_hline(yintercept = 0)+
   scale_x_continuous(limits=c(NA, 300),trans="log10")+
-  labs(x=expression(bold(HL~(m~yr^-1))), y=expression(bold(Delta*Concentration~("%"))))+
+  labs(x=expression(bold(HL~(m~yr^-1))), y=expression(bold(Delta~Concentration~("%"))))+
   facet_wrap(~name_f, nrow=3, ncol=2, scales="free_y", labeller = label_parsed)+
   #lims(x=c(NA,300))+
   theme_bw()+
@@ -573,6 +1141,22 @@ CCBPR <- ggplot()+
 CCBPR
 
 ggsave(file=paste0("Plots/CCBPR_HL_", Sys.Date(), ".png"), CCBPR)
+
+
+CCBPRNO3tmp <- ggplot()+
+  geom_point(data=Removal[Removal$RFlag2==0,],aes(x=HL.myr,y=-RNO3*100))+
+  scale_x_continuous(trans = "log10")+
+  labs(x=expression(bold(HL~(m~yr^-1))), y=expression(bold(Delta~NO3~("%"))))
+CCBPRNO3tmp
+
+CCBPRNO3tmp2 <- ggplot()+
+  geom_point(data=Removal[Removal$RFlag2==0,],aes(x=HL.myr,y=-RNO32*100))+
+  scale_x_continuous(trans = "log10")+
+  labs(x=expression(bold(HL~(m~yr^-1))), y=expression(bold(Delta~NO3~("%"))))
+CCBPRNO3tmp2
+
+CCBPRNO3 <- cowplot::plot_grid(CCBPRNO3tmp, CCBPRNO3tmp2)
+ggsave(file = paste0("Plots/CCBPRNO3_",Sys.Date(),".png"), CCBPRNO3)
 
 CCBPRCl <- ggplot()+
   geom_point(data=Removal[Removal$RFlag2==0 & !is.na(Removal$Season),],aes(x=HL.myr, y=-RCl*100), size=1.5, stroke=1.5, color="red")+
@@ -634,7 +1218,7 @@ GRABSlong
 # ggmap(CCBPmapSynoptic)
 
 
-CCBPmapSynoptic <- get_googlemap(center=c(-70.935, 42.767741), maptype = "satellite", zoom = 14)
+CCBPmapSynoptic <- get_googlemap(center=c(lon = -70.935, lat = 42.767741), maptype = "satellite", zoom = 14)
 ggmap(CCBPmapSynoptic)
 
 
@@ -839,7 +1423,7 @@ DOWB <- ggplot()+
   theme_bw()+
   theme(panel.border = element_rect(color="black",fill=NA,size=1), panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"),
-        axis.text=element_text(size=12,color="black"),
+        axis.text=element_text(size=12,color="black", face = "bold"),
         axis.title=element_text(face="bold",size=13), axis.title.y=element_text(vjust=2),
         axis.title.x=element_text(vjust=0),legend.title = element_blank(),legend.key=element_blank(),
         plot.title=element_text(size=13),legend.text=element_text(size=9),legend.position="bottom",
@@ -855,12 +1439,12 @@ NArdisWB <- ggplot()+
   geom_boxplot(data=SynopticMeans, aes(x = WBType, y=nardiseq))+
   geom_hline(yintercept=0)+
   scale_x_discrete("")+
-  scale_y_continuous(expression(bold(N["2"]*":"*Ar~Disequilibrium)))+
+  scale_y_continuous(expression(bold(N["2"]*":"*Ar~Diseq.)))+
   theme_bw()+
   theme(panel.border = element_rect(color="black",fill=NA,size=1), panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"),
-        axis.text=element_text(size=12,color="black"),
-        axis.title=element_text(face="bold",size=13), axis.title.y=element_text(vjust=2),
+        axis.text=element_text(size=12,color="black", face = "bold"),
+        axis.title=element_text(face="bold",size=13), axis.title.y=element_text(vjust=1),
         axis.title.x=element_text(vjust=0),legend.title = element_blank(),legend.key=element_blank(),
         plot.title=element_text(size=13),legend.text=element_text(size=9),legend.position="bottom",
         strip.background = element_blank(),strip.text.x = element_text(face="bold",size=12))
@@ -881,7 +1465,7 @@ SO4WB <- ggplot()+
   theme_bw()+
   theme(panel.border = element_rect(color="black",fill=NA,size=1), panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"),
-        axis.text=element_text(size=12,color="black"),
+        axis.text=element_text(size=12,color="black", face = "bold"),
         axis.title=element_text(face="bold",size=13), axis.title.y=element_text(vjust=2),
         axis.title.x=element_text(vjust=0),legend.title = element_blank(),legend.key=element_blank(),
         plot.title=element_text(size=13),legend.text=element_text(size=9),legend.position="bottom",
@@ -913,7 +1497,7 @@ TempWB <- ggplot()+
   theme_bw()+
   theme(panel.border = element_rect(color="black",fill=NA,size=1), panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"),
-        axis.text=element_text(size=12,color="black"),
+        axis.text=element_text(size=12,color="black", face = "bold"),
         axis.title=element_text(face="bold",size=13), axis.title.y=element_text(vjust=2),
         axis.title.x=element_text(vjust=0),legend.title = element_blank(),legend.key=element_blank(),
         plot.title=element_text(size=13),legend.text=element_text(size=9),legend.position="bottom",
@@ -934,7 +1518,7 @@ NO3WB <- ggplot()+
   theme_bw()+
   theme(panel.border = element_rect(color="black",fill=NA,size=1), panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"),
-        axis.text=element_text(size=12,color="black"),
+        axis.text=element_text(size=12,color="black", face = "bold"),
         axis.title=element_text(face="bold",size=13), axis.title.y=element_text(vjust=2),
         axis.title.x=element_text(vjust=0),legend.title = element_blank(),legend.key=element_blank(),
         plot.title=element_text(size=13),legend.text=element_text(size=9),legend.position="bottom",
@@ -953,7 +1537,7 @@ NH4WB <- ggplot()+
   theme_bw()+
   theme(panel.border = element_rect(color="black",fill=NA,size=1), panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"),
-        axis.text=element_text(size=12,color="black"),
+        axis.text=element_text(size=12,color="black", face = "bold"),
         axis.title=element_text(face="bold",size=13), axis.title.y=element_text(vjust=2),
         axis.title.x=element_text(vjust=0),legend.title = element_blank(),legend.key=element_blank(),
         plot.title=element_text(size=13),legend.text=element_text(size=9),legend.position="bottom",
@@ -972,7 +1556,7 @@ DINWB <- ggplot()+
   theme_bw()+
   theme(panel.border = element_rect(color="black",fill=NA,size=1), panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"),
-        axis.text=element_text(size=12,color="black"),
+        axis.text=element_text(size=12,color="black", face = "bold"),
         axis.title=element_text(face="bold",size=13), axis.title.y=element_text(vjust=2),
         axis.title.x=element_text(vjust=0),legend.title = element_blank(),legend.key=element_blank(),
         plot.title=element_text(size=13),legend.text=element_text(size=9),legend.position="bottom",
@@ -991,7 +1575,7 @@ DONWB <- ggplot()+
   theme_bw()+
   theme(panel.border = element_rect(color="black",fill=NA,size=1), panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"),
-        axis.text=element_text(size=12,color="black"),
+        axis.text=element_text(size=12,color="black", face = "bold"),
         axis.title=element_text(face="bold",size=13), axis.title.y=element_text(vjust=2),
         axis.title.x=element_text(vjust=0),legend.title = element_blank(),legend.key=element_blank(),
         plot.title=element_text(size=13),legend.text=element_text(size=9),legend.position="bottom",
@@ -1009,7 +1593,7 @@ TDNWB <- ggplot()+
   theme_bw()+
   theme(panel.border = element_rect(color="black",fill=NA,size=1), panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"),
-        axis.text=element_text(size=12,color="black"),
+        axis.text=element_text(size=12,color="black", face = "bold"),
         axis.title=element_text(face="bold",size=13), axis.title.y=element_text(vjust=2),
         axis.title.x=element_text(vjust=0),legend.title = element_blank(),legend.key=element_blank(),
         plot.title=element_text(size=13),legend.text=element_text(size=9),legend.position="bottom",
@@ -1028,7 +1612,7 @@ DOCWB <- ggplot()+
   theme_bw()+
   theme(panel.border = element_rect(color="black",fill=NA,size=1), panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"),
-        axis.text=element_text(size=12,color="black"),
+        axis.text=element_text(size=12,color="black", face = "bold"),
         axis.title=element_text(face="bold",size=13), axis.title.y=element_text(vjust=2),
         axis.title.x=element_text(vjust=0),legend.title = element_blank(),legend.key=element_blank(),
         plot.title=element_text(size=13),legend.text=element_text(size=9),legend.position="bottom",
@@ -1039,14 +1623,26 @@ ggsave(file=paste0("Plots/DONWB_", Sys.Date(), ".png"),NO3WB)
 
 t.test(Synoptic$DOC.mgL~Synoptic$WBType)
 
-WBall <- cowplot::plot_grid(NO3WB, DINWB, DONWB, TDNWB,NH4WB,DOCWB, nrow=3)
 
 
-WBall <- cowplot::plot_grid(NO3WB+theme(axis.text.x = element_blank()), DINWB+theme(axis.text.x = element_blank()),
+WBall <- cowplot::plot_grid(NO3WB, DINWB, DONWB, TDNWB,NH4WB,DOCWB, DOWB, NArdisWB, nrow=4)
+
+## 2 columns and 4 rows
+WBall2x4 <- cowplot::plot_grid(NO3WB+theme(axis.text.x = element_blank()), DINWB+theme(axis.text.x = element_blank()),
                             DONWB+theme(axis.text.x = element_blank()), TDNWB+theme(axis.text.x = element_blank()),
-                            NH4WB, DOCWB, nrow=3)
+                            NH4WB+theme(axis.text.x = element_blank()), DOCWB+theme(axis.text.x = element_blank()),
+                            DOWB, NArdisWB, nrow=4)
 
-ggsave(file=paste0("Plots/WBall_",Sys.Date(),".png"),WBall)
+## 4 columns and 2 rows
+WBall4x2 <- cowplot::plot_grid(NO3WB+theme(axis.text.x = element_blank()), DINWB+theme(axis.text.x = element_blank()),
+                            DONWB+theme(axis.text.x = element_blank()), TDNWB+theme(axis.text.x = element_blank()),
+                            NH4WB+theme(axis.text.x = element_text(angle = 45, hjust = 1)), 
+                            DOCWB+theme(axis.text.x = element_text(angle = 45, hjust = 1)), 
+                            DOWB+theme(axis.text.x = element_text(angle = 45, hjust = 1)), 
+                            NArdisWB+theme(axis.text.x = element_text(angle = 45, hjust = 1)), nrow=2, rel_heights = c(1,1.2))
+WBall4x2
+
+ggsave(file=paste0("Plots/WBall_",Sys.Date(),".png"),WBall4x2)
 
 
 ##WB t-tests
@@ -1056,6 +1652,8 @@ t.test(Synoptic$DON.mgL~Synoptic$WBType)
 t.test(Synoptic$TDN.mgL~Synoptic$WBType)
 t.test(Synoptic$NH4.ugL/1000~Synoptic$WBType)
 t.test(Synoptic$DOC.mgL~Synoptic$WBType)
+t.test(Synoptic$DO.pct~Synoptic$WBType)
+t.test(Synoptic$nardiseq~Synoptic$WBType)
 
 
 NArdisSynoptic <- ggmap(CCBPmapSynoptic)+
@@ -1206,10 +1804,50 @@ DONSynopticDFM
 ggsave(file="Plots/DON_Synoptic_DFM_2022-05-11.png",DONSynopticDFM)
 
 
+###########################################################
+## Internal Sampling
+###########################################################
+
+CCBPmapInternal<- get_googlemap(center=c(-70.935, 42.767741), maptype = "satellite", zoom = 14)
+ggmap(CCBPmapSynopticInternal)
 
 
+################################################################################
+## Compile CC discharge data and scale to CCBP
+################################################################################
 
 
+# This was done already and the resulting dataframe was stored in the 'Data' directory#####
+# Code stgored here for future analysis/re-analysis
+
+# ## Import CC discharge data
+# CCQ <- read.csv(file="C:/Users/ctw1/Box/Data/Analysis/CCBP_CH4/Data/CC_Q_Daily_2022-05-09.csv", header=TRUE, stringsAsFactors = FALSE)
+# CCQ$Date <- as.Date(CCQ$Date,format="%Y-%m-%d")
+# 
+# ## Scale to individual sampling locations
+# CCBPQ <- data.frame(Date = CCQ$Date, Discharge.m3s = (0.078275/4.63) * (CCQ$Discharge.Ls/1000), Site  ="CCBP", Sample = "CCBP_UP_3")
+# CCBPQ <- rbind(CCBPQ, data.frame(Date = CCQ$Date, Discharge.m3s = (0.554225/4.63) * (CCQ$Discharge.Ls/1000), Site  ="CCBP", Sample = "CCBP_UP_2"))
+# CCBPQ <- rbind(CCBPQ, data.frame(Date = CCQ$Date, Discharge.m3s = (0.91245/4.63) * (CCQ$Discharge.Ls/1000), Site  ="CCBP", Sample = "CCBP_UP_1"))
+# CCBPQ <- rbind(CCBPQ, data.frame(Date = CCQ$Date, Discharge.m3s = (1.72665/4.63) * (CCQ$Discharge.Ls/1000), Site  ="CCBP", Sample = "CCBP_OUT"))
+# CCBPQ <- rbind(CCBPQ, data.frame(Date = CCQ$Date, Discharge.m3s = (3.962682/4.63) * (CCQ$Discharge.Ls/1000), Site  ="CCBP", Sample = "CCBP_Side"))
+# CCBPQ <- rbind(CCBPQ, data.frame(Date = CCQ$Date, Discharge.m3s = (CCQ$Discharge.Ls/1000), Site  ="CCBP", Sample = "CC"))
+# 
+# 
+# 
+# ## Import Oyster discharge data
+# OYSQ <- read.csv(file="C:/Users/ctw1/Box/Data/Analysis/CCBP_CH4/Data/Oyster_Q_Daily_2022-05-09.csv", header=TRUE, stringsAsFactors = FALSE)
+# OYSQ$Date <- as.Date(OYSQ$Date,format="%Y-%m-%d")
+# 
+# ## Scale to individual sampling locations
+# DBBPQ <- data.frame(Date = OYSQ$Date, Discharge.m3s = (2.58999/31.33886) * OYSQ$Discharge.m3s, Site  ="DBBP", Sample = "DBBP_UP")
+# DBBPQ <- rbind(DBBPQ, data.frame(Date = OYSQ$Date, Discharge.m3s = (3.263385/31.33886) * OYSQ$Discharge.m3s, Site  ="DBBP", Sample = "DBBP_OUT"))
+# 
+# BPQ <- bind_rows(CCBPQ, DBBPQ)
+# 
+# write.csv(Q_Daily, file="Data/BPQ_2022-05-09.csv",row.names=FALSE)
+# 
+# rm(CCBPQ, CCQ, OYSQ, DBBPQ)
+#####
 
 
 ################################################################################
