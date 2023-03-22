@@ -20,7 +20,7 @@ library(tidyverse)
 
 ## Register Google API key if not already registered
 
-register_google("AIzaSyCAUmkKYVIMYg8rTYw2ex4tgpe-Qbr7F3E")
+
 
 
 ################################################################################
